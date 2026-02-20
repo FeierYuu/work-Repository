@@ -57,13 +57,13 @@ class ChatBot:
                 "welcome": "您好！我是您的智能烹饪机器人助手。请选择您想要了解的菜品或上传图片来识别食材！",
                 "send": "发送",
                 "upload_photo": "上传图片",
-                "ingredients": "配料",
                 "steps": "步骤",
                 "show_recipe": "查看食谱",
                 "show_ingredients": "查看配料",
                 "save_order": "保存订单",
                 "generate_pdf": "生成PDF",
                 "select_dish": "您选择了 {dish}，正在为您准备食谱...",
+                "ingredients": "{dish}的配料：",
                 "system_prompt": "您是一位专业的厨师机器人，能够提供详细的烹饪食谱。请确保回答包含配料列表和烹饪步骤。",
                 "user_prompt": "请为我提供 {dish} 的详细食谱，包括配料和步骤。",
                 "uploaded_photo": "已上传图片: {filename}",
@@ -73,7 +73,6 @@ class ChatBot:
                 "save_current_order": "保存当前订单",
                 "back_to_dish": "返回选择菜肴",
                 "recipe": "{dish} 的烹饪步骤：",
-                "ingredients": "{dish} 的配料：",
                 "loading_url": "正在加载图片: {url}",
                 "url_success": "图片加载成功！",
                 "url_error": "加载图片失败: {error}",
@@ -84,7 +83,6 @@ class ChatBot:
                 "welcome": "Привет! Я ваш интеллектуальный кулинарный робот-ассистент. Пожалуйста, выберите блюдо, которое вас интересует, или загрузите изображение для распознавания ингредиентов!",
                 "send": "Отправить",
                 "upload_photo": "Загрузить фото",
-                "ingredients": "Ингредиенты",
                 "steps": "Шаги приготовления",
                 "show_recipe": "Показать рецепт",
                 "show_ingredients": "Показать ингредиенты",
@@ -240,6 +238,9 @@ class ChatBot:
         self.current_dish_id = None
         # 保存当前照片路径
         self.current_photo = None
+        # 创建临时目录用于存储下载的图片
+        self.temp_dir = "temp_images"
+        os.makedirs(self.temp_dir, exist_ok=True)
         
         # 欢迎消息
         self.add_message("机器人", self.texts[self.language]["welcome"])
@@ -294,19 +295,18 @@ class ChatBot:
         
         print(f"用户选择了: {self.current_dish} (ID: {dish_id})")
         
-        # 清空之前的食谱内容
-        self.current_recipe = {}
-        
-        # 调用生成食谱函数（传入内部ID）
-        recipe = self.generate_recipe(dish_id)
+        # 直接从多语言食谱中获取当前语言的食谱
+        if dish_id in self.multi_lang_recipes and self.language in self.multi_lang_recipes[dish_id]:
+            self.current_recipe = self.multi_lang_recipes[dish_id][self.language]
+            print(f"找到预设食谱: {dish_id}")
+        else:
+            self.current_recipe = {"ingredients": [], "steps": []}
+            print(f"未找到预设食谱: {dish_id}")
         
         # 更新用户界面
         self.add_message("机器人", self.texts[self.language]["select_dish"].format(dish=self.current_dish))
         
-        # 保存生成的食谱
-        self.current_recipe = recipe
-        
-        # 添加成功生成食谱的提示
+        # 显示成功生成食谱的提示
         self.add_message("机器人", f"已为您生成 {self.current_dish} 的食谱！")
         
         # 显示可用操作
@@ -791,6 +791,7 @@ class ChatBot:
         try:
             from fpdf import FPDF
             import os
+            import platform
             
             # 生成安全的文件名
             dish_name = order['dish'] if isinstance(order['dish'], str) else "未知菜肴"
@@ -802,23 +803,66 @@ class ChatBot:
             pdf.add_page()
             pdf.set_auto_page_break(auto=True, margin=15)
             
-            # 设置字体
-            # 对于俄语支持，我们需要使用支持西里尔字母的字体
+            # 根据操作系统和语言选择字体路径
+            system = platform.system()
+            
+            # 根据语言设置字体大小
             if self.language == "ru":
-                # 尝试加载系统中的西里尔字母字体
-                font_paths = [
-                    '/System/Library/Fonts/STHeiti Light.ttc',
-                    '/System/Library/Fonts/PingFang.ttc',
-                    '/System/Library/Fonts/HelveticaNeue.ttc',
-                    '/Library/Fonts/Arial.ttf'
-                ]
+                title_size = 14
+                section_size = 12
+                text_size = 10
             else:
-                # 中文使用的字体路径
-                font_paths = [
-                    '/System/Library/Fonts/STHeiti Light.ttc',
-                    '/System/Library/Fonts/PingFang.ttc',
-                    '/Library/Fonts/Songti.ttc'
-                ]
+                title_size = 16
+                section_size = 14
+                text_size = 12
+            
+            if self.language == "ru":
+                # 俄语需要支持西里尔字母的字体，优先使用Times New Roman
+                if system == "Darwin":  # macOS
+                    font_paths = [
+                        '/Library/Fonts/Times New Roman.ttf',
+                        '/System/Library/Fonts/Supplemental/Times New Roman.ttf',
+                        '/System/Library/Fonts/HelveticaNeue.ttc',
+                        '/Library/Fonts/Arial.ttf',
+                        '/System/Library/Fonts/Supplemental/Arial.ttf'
+                    ]
+                elif system == "Windows":  # Windows
+                    font_paths = [
+                        'C:/Windows/Fonts/times.ttf',
+                        'C:/Windows/Fonts/times.ttf',
+                        'C:/Windows/Fonts/Times.ttf',
+                        'C:/Windows/Fonts/arial.ttf',
+                        'C:/Windows/Fonts/Arial.ttf'
+                    ]
+                else:  # Linux
+                    font_paths = [
+                        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                        '/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf',
+                        '/usr/share/fonts/truetype/freefont/FreeSerif.ttf'
+                    ]
+            else:
+                # 中文需要的字体
+                if system == "Darwin":  # macOS
+                    font_paths = [
+                        '/System/Library/Fonts/STHeiti Light.ttc',
+                        '/System/Library/Fonts/PingFang.ttc',
+                        '/System/Library/Fonts/STHeiti Medium.ttc',
+                        '/Library/Fonts/Songti.ttc',
+                        '/System/Library/Fonts/Supplemental/Songti.ttc'
+                    ]
+                elif system == "Windows":  # Windows
+                    font_paths = [
+                        'C:/Windows/Fonts/msyh.ttc',  # 微软雅黑
+                        'C:/Windows/Fonts/simhei.ttf',  # 黑体
+                        'C:/Windows/Fonts/simsun.ttc',  # 宋体
+                        'C:/Windows/Fonts/STXIHEI.TTF'  # 华文细黑
+                    ]
+                else:  # Linux
+                    font_paths = [
+                        '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+                        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+                        '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc'
+                    ]
             
             font_loaded = False
             font_name = "CustomFont"  # 使用固定的字体名称
@@ -836,30 +880,35 @@ class ChatBot:
             
             if not font_loaded:
                 print("无法加载任何字体文件，使用默认字体")
-            else:
-                pdf.set_font(font_name, size=12)
+                print("注意：默认字体可能不支持中文或俄语，请确保系统安装了相应的字体")
+                pdf.set_font("Arial", size=text_size)
             
             # 添加标题
-            pdf.set_font(font_name, size=16)
-            pdf.cell(200, 10, txt=f"{self.texts[self.language]['title']}: {order['dish']}", align='C', ln=True)
+            if font_loaded:
+                pdf.set_font(font_name, size=title_size)
+            pdf.cell(200, 10, f"{self.texts[self.language]['title']}: {order['dish']}", align='C', ln=True)
             pdf.ln(10)
             
             # 添加配料
-            pdf.set_font(font_name, size=14)
-            pdf.cell(200, 10, txt=self.texts[self.language]['ingredients'].format(dish=''), ln=True)
+            if font_loaded:
+                pdf.set_font(font_name, size=section_size)
+            pdf.cell(200, 10, self.texts[self.language]['ingredients'].format(dish=order['dish']), ln=True)
             pdf.ln(5)
-            pdf.set_font(font_name, size=12)
+            if font_loaded:
+                pdf.set_font(font_name, size=text_size)
             for ingredient in order['ingredients']:
-                pdf.cell(200, 10, txt=f"• {ingredient}", ln=True)
+                pdf.cell(200, 10, f"• {ingredient}", ln=True)
             pdf.ln(10)
             
             # 添加步骤
-            pdf.set_font(font_name, size=14)
-            pdf.cell(200, 10, txt=self.texts[self.language]['steps'], ln=True)
+            if font_loaded:
+                pdf.set_font(font_name, size=section_size)
+            pdf.cell(200, 10, self.texts[self.language]['steps'], ln=True)
             pdf.ln(5)
-            pdf.set_font(font_name, size=12)
+            if font_loaded:
+                pdf.set_font(font_name, size=text_size)
             for idx, step in enumerate(order['steps'], start=1):
-                pdf.cell(200, 10, txt=f"{idx}. {step}", ln=True)
+                pdf.cell(200, 10, f"{idx}. {step}", ln=True)
             
             pdf.output(safe_filename)
             print(f"PDF已保存为: {safe_filename}")
