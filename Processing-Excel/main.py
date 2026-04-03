@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description='教师课程表处理工具')
     parser.add_argument(
         '--input',
-        default='ITsTiM_Raspisanie_2_polugodie_25-26_mag__pechat.xlsx',
+        default='ITsTiM_Raspisanie_2_polugodie_25-26_bak__pechat.xlsx',
         help='Excel输入文件路径'
     )
     parser.add_argument(

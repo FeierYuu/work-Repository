@@ -107,6 +107,9 @@ class ExcelReader:
                 if 'ПМ-' in col[0] or 'ИиВТ-' in col[0]:
                     current_groups.append(col[0].strip())
 
+        # 用于去重的集合，基于 (day, time, subject, room, group, activity_type)
+        seen_entries = set()
+
         for row_idx, row in enumerate(self.worksheet.iter_rows(values_only=True), 1):
             # 检查是否是星期行
             for cell in row[:3]:
@@ -133,16 +136,29 @@ class ExcelReader:
                             # 获取组别（从表头或列索引推断）
                             group = current_groups[0] if current_groups else ''
 
-                            entry = ScheduleEntry(
-                                day=current_day,
-                                time=current_time,
-                                subject=parsed['subject'],
-                                teacher=teacher_name,
-                                room=parsed['room'],
-                                group=group,
-                                activity_type=parsed['activity_type']
+                            # 创建去重键
+                            entry_key = (
+                                current_day,
+                                current_time,
+                                parsed['subject'],
+                                parsed['room'],
+                                group,
+                                parsed['activity_type']
                             )
-                            schedule.append(entry)
+
+                            # 只添加未重复的条目
+                            if entry_key not in seen_entries:
+                                seen_entries.add(entry_key)
+                                entry = ScheduleEntry(
+                                    day=current_day,
+                                    time=current_time,
+                                    subject=parsed['subject'],
+                                    teacher=teacher_name,
+                                    room=parsed['room'],
+                                    group=group,
+                                    activity_type=parsed['activity_type']
+                                )
+                                schedule.append(entry)
 
         return schedule
 
